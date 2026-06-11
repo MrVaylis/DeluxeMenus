@@ -469,16 +469,16 @@ public class ClickActionTask extends UniversalRunnable {
     }
 
     private @Nullable Player resolveTargetPlayer(final @NotNull Player player, final @NotNull Optional<MenuHolder> holder) {
+        if (this.placeholderPlayerUuid != null) {
+            Player placeholderPlayer = Bukkit.getPlayer(this.placeholderPlayerUuid);
+            return placeholderPlayer != null ? placeholderPlayer : player;
+        }
+
         if (holder.isPresent() && holder.get().getPlaceholderPlayer() != null) {
             return holder.get().getPlaceholderPlayer();
         }
 
-        if (this.placeholderPlayerUuid == null) {
-            return player;
-        }
-
-        Player placeholderPlayer = Bukkit.getPlayer(this.placeholderPlayerUuid);
-        return placeholderPlayer == null ? player : placeholderPlayer;
+        return player;
     }
 
     private @Nullable Map<String, String> getArgumentSnapshot() {

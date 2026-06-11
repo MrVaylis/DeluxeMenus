@@ -41,6 +41,7 @@ public class Menu {
     private static final Map<String, Menu> menus = new ConcurrentHashMap<>();
     private static final Set<MenuHolder> menuHolders = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Menu> lastOpenedMenus = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> menuOpenGenerationAttempts = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> menuOpenGenerations = new ConcurrentHashMap<>();
 
     private final DeluxeMenus plugin;
@@ -180,8 +181,16 @@ public class Menu {
         return menuOpenGenerations.compute(playerId, (key, value) -> value == null ? 1L : value + 1L);
     }
 
+    static long nextOpenAttempt(final @NotNull UUID playerId) {
+        return menuOpenGenerationAttempts.compute(playerId, (key, value) -> value == null ? 1L : value + 1L);
+    }
+
     static boolean isCurrentOpenGeneration(final @NotNull UUID playerId, final long generation) {
         return menuOpenGenerations.getOrDefault(playerId, 0L) == generation;
+    }
+
+    static boolean isCurrentOpenAttempt(final @NotNull UUID playerId, final long generation) {
+        return menuOpenGenerationAttempts.getOrDefault(playerId, 0L) == generation;
     }
 
     static boolean isCurrentHolder(final @NotNull Player player, final @NotNull MenuHolder holder) {
@@ -321,8 +330,6 @@ public class Menu {
             return;
         }
 
-        final long openGeneration = nextOpenGeneration(viewer.getUniqueId());
-
         DeluxeMenusPreOpenMenuEvent preOpenEvent = new DeluxeMenusPreOpenMenuEvent(viewer);
         Bukkit.getPluginManager().callEvent(preOpenEvent);
 
@@ -334,7 +341,6 @@ public class Menu {
         if (placeholderPlayer != null) {
             holder.setPlaceholderPlayer(placeholderPlayer);
         }
-        holder.setOpenGeneration(openGeneration);
         holder.setTypedArgs(args);
         holder.parsePlaceholdersInArguments(this.options.parsePlaceholdersInArguments());
         holder.parsePlaceholdersAfterArguments(this.options.parsePlaceholdersAfterArguments());
@@ -346,6 +352,9 @@ public class Menu {
         if (!this.handleOpenRequirements(holder)) {
             return;
         }
+
+        final long openGeneration = nextOpenAttempt(viewer.getUniqueId());
+        holder.setOpenGeneration(openGeneration);
 
         scheduler.runTaskAsynchronously(() -> {
 
@@ -388,8 +397,6 @@ public class Menu {
 
             holder.setMenuName(this.options.name());
             holder.setActiveItems(activeItems);
-
-            this.options.openHandler().ifPresent(h -> h.onClick(holder));
 
             String title = StringUtils.color(holder.setPlaceholdersAndArguments(this.options.title()));
 
@@ -437,12 +444,12 @@ public class Menu {
 
             final boolean updatePlaceholders = update;
 
-            holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
-
             scheduler.runTask(viewer, () -> {
-                if (!isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
                     return;
                 }
+
+                menuOpenGenerations.put(viewer.getUniqueId(), holder.getOpenGeneration());
 
                 if (options.refresh()) {
                     holder.startRefreshTask();
@@ -459,9 +466,11 @@ public class Menu {
                 if (updatePlaceholders) {
                     holder.startUpdatePlaceholdersTask();
                 }
-            });
 
-            scheduler.runTask(viewer, () -> {
+                this.options.openHandler().ifPresent(h -> h.onClick(holder));
+
+                holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
+
                 DeluxeMenusOpenMenuEvent openEvent = new DeluxeMenusOpenMenuEvent(viewer, holder);
                 Bukkit.getPluginManager().callEvent(openEvent);
             });

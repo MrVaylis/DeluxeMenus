@@ -177,6 +177,25 @@ public class MenuHolder implements InventoryHolder {
 
             if (active.isEmpty()) {
                 scheduler.runTask(viewer, () -> {
+                    try {
+                        if (!Menu.isCurrentHolder(viewer, this)) {
+                            return;
+                        }
+
+                        if (!Menu.isCurrentOpenGeneration(viewer.getUniqueId(), holderGeneration)) {
+                            return;
+                        }
+
+                        Menu.closeMenu(plugin, viewer, true, true, false, this);
+                    } finally {
+                        setUpdating(false);
+                    }
+                });
+                return;
+            }
+
+            scheduler.runTask(viewer, () -> {
+                try {
                     if (!Menu.isCurrentHolder(viewer, this)) {
                         return;
                     }
@@ -185,58 +204,45 @@ public class MenuHolder implements InventoryHolder {
                         return;
                     }
 
-                    Menu.closeMenu(plugin, viewer, true, true, false, this);
-                });
-                return;
-            }
-
-            scheduler.runTask(viewer, () -> {
-                if (!Menu.isCurrentHolder(viewer, this)) {
-                    return;
-                }
-
-                if (!Menu.isCurrentOpenGeneration(viewer.getUniqueId(), holderGeneration)) {
-                    return;
-                }
-
-                for (int slot : slotsToClear) {
-                    getInventory().setItem(slot, null);
-                }
-
-                boolean update = false;
-
-                for (MenuItem item : active) {
-
-                    ItemStack iStack = item.getItemStack(this);
-
-                    if (iStack == null) {
-                        continue;
+                    for (int slot : slotsToClear) {
+                        getInventory().setItem(slot, null);
                     }
 
-                    iStack = plugin.getMenuItemMarker().mark(iStack);
+                    boolean update = false;
 
-                    int slot = item.options().slot();
+                    for (MenuItem item : active) {
 
-                    if (slot >= menu.options().size()) {
-                        continue;
+                        ItemStack iStack = item.getItemStack(this);
+
+                        if (iStack == null) {
+                            continue;
+                        }
+
+                        iStack = plugin.getMenuItemMarker().mark(iStack);
+
+                        int slot = item.options().slot();
+
+                        if (slot >= menu.options().size()) {
+                            continue;
+                        }
+
+                        if (item.options().updatePlaceholders()) {
+                            update = true;
+                        }
+
+                        getInventory().setItem(item.options().slot(), iStack);
                     }
 
-                    if (item.options().updatePlaceholders()) {
-                        update = true;
+                    setActiveItems(active);
+
+                    if (update && updateTask == null) {
+                        startUpdatePlaceholdersTask();
+                    } else if (!update && updateTask != null) {
+                        stopPlaceholderUpdate();
                     }
-
-                    getInventory().setItem(item.options().slot(), iStack);
+                } finally {
+                    setUpdating(false);
                 }
-
-                setActiveItems(active);
-
-                if (update && updateTask == null) {
-                    startUpdatePlaceholdersTask();
-                } else if (!update && updateTask != null) {
-                    stopPlaceholderUpdate();
-                }
-
-                setUpdating(false);
             });
         });
     }
