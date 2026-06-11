@@ -166,15 +166,25 @@ public class Menu {
     }
 
     public static boolean isInMenu(final @NotNull Player player) {
-        return menuHolders.stream().anyMatch(h -> h.getViewerName().equals(player.getName()));
+        return menuHolders.stream().anyMatch(
+                h -> h.getViewerName().equals(player.getName())
+                        && isCurrentOpenGeneration(player.getUniqueId(), h.getOpenGeneration())
+        );
     }
 
     public static boolean isInMenu(final @NotNull Player player, final @NotNull String menu) {
-        return menuHolders.stream().anyMatch(h -> h.getMenuName().equals(menu) && h.getViewerName().equals(player.getName()));
+        return menuHolders.stream().anyMatch(
+                h -> h.getMenuName().equals(menu)
+                        && h.getViewerName().equals(player.getName())
+                        && isCurrentOpenGeneration(player.getUniqueId(), h.getOpenGeneration())
+        );
     }
 
     public static Optional<MenuHolder> getMenuHolder(final @NotNull Player player) {
-        return menuHolders.stream().filter(h -> h.getViewerName().equals(player.getName())).findFirst();
+        return menuHolders.stream().filter(
+                h -> h.getViewerName().equals(player.getName())
+                        && isCurrentOpenGeneration(player.getUniqueId(), h.getOpenGeneration())
+        ).findFirst();
     }
 
     static long nextOpenGeneration(final @NotNull UUID playerId) {
@@ -449,12 +459,6 @@ public class Menu {
                     return;
                 }
 
-                menuOpenGenerations.put(viewer.getUniqueId(), holder.getOpenGeneration());
-
-                if (options.refresh()) {
-                    holder.startRefreshTask();
-                }
-
                 if (isInMenu(holder.getViewer())) {
                     getMenuHolder(holder.getViewer())
                             .ifPresent(currentHolder -> closeMenu(plugin, holder.getViewer(), false, true, true, currentHolder));
@@ -464,33 +468,52 @@ public class Menu {
                     return;
                 }
 
-                viewer.openInventory(inventory);
+                menuHolders.add(holder);
+
                 if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    cleanupStaleOpenAttempt(holder.getPlugin(), viewer, holder);
                     return;
                 }
 
-                menuHolders.add(holder);
+                viewer.openInventory(inventory);
                 if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    cleanupStaleOpenAttempt(holder.getPlugin(), viewer, holder);
                     return;
+                }
+
+                this.options.openHandler().ifPresent(h -> h.onClick(holder));
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    cleanupStaleOpenAttempt(holder.getPlugin(), viewer, holder);
+                    return;
+                }
+
+                holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    cleanupStaleOpenAttempt(holder.getPlugin(), viewer, holder);
+                    return;
+                }
+
+                menuOpenGenerations.put(viewer.getUniqueId(), holder.getOpenGeneration());
+
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())
+                        || !isCurrentHolder(viewer, holder)
+                        || !isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    cleanupStaleOpenAttempt(holder.getPlugin(), viewer, holder);
+                    return;
+                }
+
+                if (options.refresh()) {
+                    holder.startRefreshTask();
                 }
 
                 if (updatePlaceholders) {
                     holder.startUpdatePlaceholdersTask();
                 }
 
-                this.options.openHandler().ifPresent(h -> h.onClick(holder));
-                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
-                    return;
-                }
-
-                holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
-                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
-                    return;
-                }
-
                 if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())
                         || !isCurrentHolder(viewer, holder)
                         || !isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    cleanupStaleOpenAttempt(holder.getPlugin(), viewer, holder);
                     return;
                 }
 
@@ -498,6 +521,18 @@ public class Menu {
                 Bukkit.getPluginManager().callEvent(openEvent);
             });
         });
+    }
+
+    private static void cleanupStaleOpenAttempt(
+            final @NotNull DeluxeMenus plugin,
+            final @NotNull Player viewer,
+            final @NotNull MenuHolder holder
+    ) {
+        menuHolders.remove(holder);
+        closeMenu(plugin, viewer, true, false, false, holder);
+        if (viewer.getOpenInventory().getTopInventory() == holder.getInventory()) {
+            viewer.closeInventory();
+        }
     }
 
     private static void executeCommands(final @NotNull DeluxeMenus plugin, final @NotNull Player viewer, final @NotNull List<String> commands, final @NotNull MenuHolder holder) {
@@ -545,7 +580,10 @@ public class Menu {
     }
 
     public void refreshForAll() {
-        menuHolders.stream().filter(menuHolder -> menuHolder.getMenuName().equalsIgnoreCase(options.name())).forEach(MenuHolder::refreshMenu);
+        menuHolders.stream()
+                .filter(menuHolder -> menuHolder.getMenuName().equalsIgnoreCase(options.name())
+                        && isCurrentOpenGeneration(menuHolder.getViewer().getUniqueId(), menuHolder.getOpenGeneration())
+                ).forEach(MenuHolder::refreshMenu);
     }
 
     public @NotNull Map<Integer, TreeMap<Integer, MenuItem>> getMenuItems() {
@@ -565,7 +603,10 @@ public class Menu {
     }
 
     public int activeViewers() {
-        return (int) menuHolders.stream().filter(holder -> holder.getMenuName().equalsIgnoreCase(options.name())).count();
+        return (int) menuHolders.stream()
+                .filter(holder -> holder.getMenuName().equalsIgnoreCase(options.name())
+                        && isCurrentOpenGeneration(holder.getViewer().getUniqueId(), holder.getOpenGeneration())
+                ).count();
     }
 
 }
