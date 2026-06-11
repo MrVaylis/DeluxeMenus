@@ -460,18 +460,37 @@ public class Menu {
                             .ifPresent(currentHolder -> closeMenu(plugin, holder.getViewer(), false, true, true, currentHolder));
                 }
 
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
+
                 viewer.openInventory(inventory);
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
+
                 menuHolders.add(holder);
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
 
                 if (updatePlaceholders) {
                     holder.startUpdatePlaceholdersTask();
                 }
 
                 this.options.openHandler().ifPresent(h -> h.onClick(holder));
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
 
                 holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
 
-                if (!isCurrentHolder(viewer, holder) || !isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                if (!isCurrentOpenAttempt(viewer.getUniqueId(), holder.getOpenGeneration())
+                        || !isCurrentHolder(viewer, holder)
+                        || !isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
                     return;
                 }
 
