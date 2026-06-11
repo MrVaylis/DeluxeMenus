@@ -41,6 +41,7 @@ public class Menu {
     private static final Map<String, Menu> menus = new ConcurrentHashMap<>();
     private static final Set<MenuHolder> menuHolders = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Menu> lastOpenedMenus = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> menuOpenGenerations = new ConcurrentHashMap<>();
 
     private final DeluxeMenus plugin;
     private final TaskScheduler scheduler;
@@ -175,6 +176,19 @@ public class Menu {
         return menuHolders.stream().filter(h -> h.getViewerName().equals(player.getName())).findFirst();
     }
 
+    static long nextOpenGeneration(final @NotNull UUID playerId) {
+        return menuOpenGenerations.compute(playerId, (key, value) -> value == null ? 1L : value + 1L);
+    }
+
+    static boolean isCurrentOpenGeneration(final @NotNull UUID playerId, final long generation) {
+        return menuOpenGenerations.getOrDefault(playerId, 0L) == generation;
+    }
+
+    static boolean isCurrentHolder(final @NotNull Player player, final @NotNull MenuHolder holder) {
+        Optional<MenuHolder> optionalCurrentHolder = getMenuHolder(player);
+        return optionalCurrentHolder.filter(current -> current == holder).isPresent();
+    }
+
     public static Optional<Menu> getOpenMenu(final @NotNull Player player) {
         return getMenuHolder(player).flatMap(MenuHolder::getMenu);
     }
@@ -199,12 +213,27 @@ public class Menu {
     }
 
     public static void closeMenu(final @NotNull DeluxeMenus plugin, final @NotNull Player player, final boolean close, final boolean executeCloseActions, final boolean runCloseCommmands) {
+        closeMenu(plugin, player, close, executeCloseActions, runCloseCommmands, null);
+    }
+
+    static void closeMenu(
+            final @NotNull DeluxeMenus plugin,
+            final @NotNull Player player,
+            final boolean close,
+            final boolean executeCloseActions,
+            final boolean runCloseCommmands,
+            final @Nullable MenuHolder expectedHolder
+    ) {
         Optional<MenuHolder> optionalHolder = getMenuHolder(player);
         if (optionalHolder.isEmpty()) {
             return;
         }
 
         MenuHolder holder = optionalHolder.get();
+
+        if (expectedHolder != null && holder != expectedHolder) {
+            return;
+        }
 
         holder.stopPlaceholderUpdate();
         holder.stopRefreshTask();
@@ -292,6 +321,8 @@ public class Menu {
             return;
         }
 
+        final long openGeneration = nextOpenGeneration(viewer.getUniqueId());
+
         DeluxeMenusPreOpenMenuEvent preOpenEvent = new DeluxeMenusPreOpenMenuEvent(viewer);
         Bukkit.getPluginManager().callEvent(preOpenEvent);
 
@@ -303,6 +334,7 @@ public class Menu {
         if (placeholderPlayer != null) {
             holder.setPlaceholderPlayer(placeholderPlayer);
         }
+        holder.setOpenGeneration(openGeneration);
         holder.setTypedArgs(args);
         holder.parsePlaceholdersInArguments(this.options.parsePlaceholdersInArguments());
         holder.parsePlaceholdersAfterArguments(this.options.parsePlaceholdersAfterArguments());
@@ -408,12 +440,17 @@ public class Menu {
             holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
 
             scheduler.runTask(viewer, () -> {
+                if (!isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
+
                 if (options.refresh()) {
                     holder.startRefreshTask();
                 }
 
                 if (isInMenu(holder.getViewer())) {
-                    closeMenu(plugin, holder.getViewer(), false);
+                    getMenuHolder(holder.getViewer())
+                            .ifPresent(currentHolder -> closeMenu(plugin, holder.getViewer(), false, true, true, currentHolder));
                 }
 
                 viewer.openInventory(inventory);
@@ -462,6 +499,7 @@ public class Menu {
                     action.getType(),
                     command,
                     holder.getTypedArgs(),
+                    holder.getPlaceholderPlayer(),
                     true,
                     true
             );

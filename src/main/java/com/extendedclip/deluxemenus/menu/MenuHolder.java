@@ -33,6 +33,7 @@ public class MenuHolder implements InventoryHolder {
     private boolean parsePlaceholdersInArguments;
     private boolean parsePlaceholdersAfterArguments;
     private Map<String, String> typedArgs;
+    private long openGeneration = 0;
 
     public MenuHolder(final @NotNull DeluxeMenus plugin, final @NotNull Player viewer) {
         this.plugin = plugin;
@@ -135,6 +136,8 @@ public class MenuHolder implements InventoryHolder {
             return;
         }
 
+        final long holderGeneration = this.openGeneration;
+
         setUpdating(true);
 
         scheduler.runTaskAsynchronously(() -> {
@@ -173,11 +176,28 @@ public class MenuHolder implements InventoryHolder {
             }
 
             if (active.isEmpty()) {
-                scheduler.runTask(viewer, () -> Menu.closeMenu(plugin, viewer, true));
+                scheduler.runTask(viewer, () -> {
+                    if (!Menu.isCurrentHolder(viewer, this)) {
+                        return;
+                    }
+
+                    if (!Menu.isCurrentOpenGeneration(viewer.getUniqueId(), holderGeneration)) {
+                        return;
+                    }
+
+                    Menu.closeMenu(plugin, viewer, true, true, false, this);
+                });
                 return;
             }
 
             scheduler.runTask(viewer, () -> {
+                if (!Menu.isCurrentHolder(viewer, this)) {
+                    return;
+                }
+
+                if (!Menu.isCurrentOpenGeneration(viewer.getUniqueId(), holderGeneration)) {
+                    return;
+                }
 
                 for (int slot : slotsToClear) {
                     getInventory().setItem(slot, null);
@@ -353,7 +373,15 @@ public class MenuHolder implements InventoryHolder {
     }
 
     public void setTypedArgs(Map<String, String> typedArgs) {
-        this.typedArgs = typedArgs;
+        this.typedArgs = typedArgs == null ? null : Map.copyOf(typedArgs);
+    }
+
+    public long getOpenGeneration() {
+        return openGeneration;
+    }
+
+    public void setOpenGeneration(final long openGeneration) {
+        this.openGeneration = openGeneration;
     }
 
     public void parsePlaceholdersInArguments(final boolean parsePlaceholdersInArguments) {

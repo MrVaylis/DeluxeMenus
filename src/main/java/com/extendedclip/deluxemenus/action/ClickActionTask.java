@@ -16,6 +16,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
@@ -33,8 +34,9 @@ public class ClickActionTask extends UniversalRunnable {
     private final UUID uuid;
     private final ActionType actionType;
     private final String exec;
-    // Ugly hack to get around the fact that arguments are not available at task execution time
+    // Snapshot placeholders context at task creation time
     private final Map<String, String> arguments;
+    private final UUID placeholderPlayerUuid;
     private final boolean parsePlaceholdersInArguments;
     private final boolean parsePlaceholdersAfterArguments;
 
@@ -47,12 +49,26 @@ public class ClickActionTask extends UniversalRunnable {
             final boolean parsePlaceholdersInArguments,
             final boolean parsePlaceholdersAfterArguments
     ) {
+        this(plugin, uuid, actionType, exec, arguments, null, parsePlaceholdersInArguments, parsePlaceholdersAfterArguments);
+    }
+
+    public ClickActionTask(
+            @NotNull final DeluxeMenus plugin,
+            @NotNull final UUID uuid,
+            @NotNull final ActionType actionType,
+            @NotNull final String exec,
+            @NotNull final Map<String, String> arguments,
+            @Nullable final Player placeholderPlayer,
+            final boolean parsePlaceholdersInArguments,
+            final boolean parsePlaceholdersAfterArguments
+    ) {
         this.plugin = plugin;
         this.scheduler = plugin.getScheduler();
         this.uuid = uuid;
         this.actionType = actionType;
         this.exec = exec;
-        this.arguments = arguments;
+        this.arguments = arguments == null ? null : Map.copyOf(arguments);
+        this.placeholderPlayerUuid = placeholderPlayer == null ? null : placeholderPlayer.getUniqueId();
         this.parsePlaceholdersInArguments = parsePlaceholdersInArguments;
         this.parsePlaceholdersAfterArguments = parsePlaceholdersAfterArguments;
     }
@@ -65,9 +81,7 @@ public class ClickActionTask extends UniversalRunnable {
         }
 
         final Optional<MenuHolder> holder = Menu.getMenuHolder(player);
-        final Player target = holder.isPresent() && holder.get().getPlaceholderPlayer() != null
-                ? holder.get().getPlaceholderPlayer()
-                : player;
+        final Player target = resolveTargetPlayer(player, holder);
 
         final String executable = StringUtils.replacePlaceholdersAndArguments(
                 this.exec,
@@ -137,6 +151,8 @@ public class ClickActionTask extends UniversalRunnable {
             case OPEN_GUI_MENU, OPEN_MENU -> {
                 final String temporaryExecutable = executable.replaceAll("\\s+", " ").replace("  ", " ");
                 final String[] executableParts = temporaryExecutable.split(" ", 2);
+                final Map<String, String> inheritedArguments = getArgumentSnapshot();
+                final Player openPlaceholder = getOpenPlaceholder(holder);
 
                 if (executableParts.length == 0) {
                     plugin.debug(DebugLevel.HIGHEST, Level.WARNING, "Could not find and open menu " + executable);
@@ -170,23 +186,13 @@ public class ClickActionTask extends UniversalRunnable {
                         );
                     }
 
-                    if (holder.isEmpty()) {
-                        menuToOpen.openMenu(player);
-                        break;
-                    }
-
-                    menuToOpen.openMenu(player, holder.get().getTypedArgs(), holder.get().getPlaceholderPlayer());
+                    menuToOpen.openMenu(player, inheritedArguments, openPlaceholder);
                     break;
                 }
 
                 if (passedArgumentValues == null || passedArgumentValues.length == 0) {
                     // Replicate old behavior: If no arguments are given, open the menu with the arguments from the current menu
-                    if (holder.isEmpty()) {
-                        menuToOpen.openMenu(player);
-                        break;
-                    }
-
-                    menuToOpen.openMenu(player, holder.get().getTypedArgs(), holder.get().getPlaceholderPlayer());
+                    menuToOpen.openMenu(player, inheritedArguments, openPlaceholder);
                     break;
                 }
 
@@ -200,10 +206,10 @@ public class ClickActionTask extends UniversalRunnable {
                 }
 
                 final Map<String, String> argumentsMap = new HashMap<>();
-                if (holder.isPresent() && holder.get().getTypedArgs() != null) {
+                if (inheritedArguments != null) {
                     // Pass the arguments from the current menu to the new menu. If the new menu has arguments with the
                     // same name, they will be overwritten
-                    argumentsMap.putAll(holder.get().getTypedArgs());
+                    argumentsMap.putAll(inheritedArguments);
                 }
 
                 for (int index = 0; index < menuArgumentNames.size(); index++) {
@@ -229,12 +235,8 @@ public class ClickActionTask extends UniversalRunnable {
                     argumentsMap.put(argumentName, passedArgumentValues[index]);
                 }
 
-                if (holder.isEmpty()) {
-                    menuToOpen.openMenu(player, argumentsMap, null);
-                    break;
-                }
-
-                menuToOpen.openMenu(player, argumentsMap, holder.get().getPlaceholderPlayer());
+                menuToOpen.openMenu(player, argumentsMap, openPlaceholder);
+                break;
             }
             case CONNECT -> plugin.connect(player, executable);
             case JSON_MESSAGE -> AdventureUtils.sendJson(plugin, player, executable);
@@ -464,5 +466,41 @@ public class ClickActionTask extends UniversalRunnable {
 
     private boolean isRaw(ActionType actionType) {
         return actionType == ActionType.PLAY_RAW_SOUND || actionType == ActionType.BROADCAST_RAW_SOUND || actionType == ActionType.BROADCAST_WORLD_RAW_SOUND;
+    }
+
+    private @Nullable Player resolveTargetPlayer(final @NotNull Player player, final @NotNull Optional<MenuHolder> holder) {
+        if (holder.isPresent() && holder.get().getPlaceholderPlayer() != null) {
+            return holder.get().getPlaceholderPlayer();
+        }
+
+        if (this.placeholderPlayerUuid == null) {
+            return player;
+        }
+
+        Player placeholderPlayer = Bukkit.getPlayer(this.placeholderPlayerUuid);
+        return placeholderPlayer == null ? player : placeholderPlayer;
+    }
+
+    private @Nullable Map<String, String> getArgumentSnapshot() {
+        if (this.arguments == null) {
+            return null;
+        }
+
+        return Map.copyOf(this.arguments);
+    }
+
+    private @Nullable Player getOpenPlaceholder(final @NotNull Optional<MenuHolder> holder) {
+        if (this.placeholderPlayerUuid != null) {
+            Player placeholderPlayer = Bukkit.getPlayer(this.placeholderPlayerUuid);
+            if (placeholderPlayer != null) {
+                return placeholderPlayer;
+            }
+        }
+
+        if (holder.isPresent() && holder.get().getPlaceholderPlayer() != null) {
+            return holder.get().getPlaceholderPlayer();
+        }
+
+        return null;
     }
 }

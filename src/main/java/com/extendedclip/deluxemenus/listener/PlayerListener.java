@@ -91,6 +91,9 @@ public class PlayerListener extends Listener {
             return;
         }
 
+        this.cache.invalidate(player.getUniqueId());
+        this.shiftCache.invalidate(player.getUniqueId());
+
         if (Menu.isInMenu(player)) {
             Menu.closeMenu(plugin, player, false);
         }

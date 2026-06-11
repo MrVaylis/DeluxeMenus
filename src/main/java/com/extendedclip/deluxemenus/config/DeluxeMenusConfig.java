@@ -1228,7 +1228,16 @@ public class DeluxeMenusConfig {
                         continue;
                     }
 
-                    final ClickActionTask actionTask = new ClickActionTask(plugin, holder.getViewer().getUniqueId(), action.getType(), action.getExecutable(), holder.getTypedArgs(), holder.parsePlaceholdersInArguments(), holder.parsePlaceholdersAfterArguments());
+                    final ClickActionTask actionTask = new ClickActionTask(
+                            plugin,
+                            holder.getViewer().getUniqueId(),
+                            action.getType(),
+                            action.getExecutable(),
+                            holder.getTypedArgs(),
+                            holder.getPlaceholderPlayer(),
+                            holder.parsePlaceholdersInArguments(),
+                            holder.parsePlaceholdersAfterArguments()
+                    );
 
                     if (action.hasDelay()) {
                         actionTask.runTaskLater(plugin, action.getDelay(holder));
