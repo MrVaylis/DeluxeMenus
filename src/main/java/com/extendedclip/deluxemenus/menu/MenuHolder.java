@@ -186,7 +186,7 @@ public class MenuHolder implements InventoryHolder {
                             return;
                         }
 
-                        Menu.closeMenu(plugin, viewer, true, true, false, this);
+                        Menu.closeMenu(plugin, viewer, true, true, true, this);
                     } finally {
                         setUpdating(false);
                     }

@@ -471,6 +471,10 @@ public class Menu {
 
                 holder.getMenu().map(Menu::options).map(MenuOptions::guiOpenCommands).ifPresent(commands -> executeCommands(plugin, viewer, commands, holder));
 
+                if (!isCurrentHolder(viewer, holder) || !isCurrentOpenGeneration(viewer.getUniqueId(), holder.getOpenGeneration())) {
+                    return;
+                }
+
                 DeluxeMenusOpenMenuEvent openEvent = new DeluxeMenusOpenMenuEvent(viewer, holder);
                 Bukkit.getPluginManager().callEvent(openEvent);
             });
