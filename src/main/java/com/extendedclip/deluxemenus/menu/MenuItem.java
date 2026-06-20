@@ -411,7 +411,7 @@ public class MenuItem {
                         plugin.debug(
                               DebugLevel.HIGHEST,
                               Level.INFO,
-                              "Failed to add enchantment " + entry.getKey().key().asString() + " to item " + itemStack.getType()
+                              "Failed to add enchantment " + entry.getKey().getKey() + " to item " + itemStack.getType()
                         );
                     }
                 }
@@ -636,7 +636,11 @@ public class MenuItem {
         NamespacedKey key = NamespacedKey.fromString(normalizedName);
 
         if (key == null) {
-            key = NamespacedKey.minecraft(normalizedName);
+            try {
+                key = NamespacedKey.minecraft(normalizedName);
+            } catch (IllegalArgumentException exception) {
+                return null;
+            }
         }
 
         return registry.get(key);

@@ -35,7 +35,6 @@ import com.extendedclip.deluxemenus.utils.VersionHelper;
 import com.google.common.base.Enums;
 import com.google.common.primitives.Ints;
 import org.bukkit.DyeColor;
-import org.bukkit.Keyed;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -57,6 +56,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -728,7 +730,7 @@ public class DeluxeMenusConfig {
 
                     try {
                         color = DyeColor.valueOf(metaParts[0].toUpperCase());
-                        type = getRegistryValue(Registry.BANNER_PATTERN, metaParts[1]);
+                        type = getPatternType(metaParts[1]);
                     } catch (IllegalArgumentException exception) {
                         plugin.debug(DebugLevel.HIGHEST, Level.WARNING, "Banner Meta for item: " + key + ", meta entry: " + e + " is invalid! Skipping this entry!");
 
@@ -1292,19 +1294,40 @@ public class DeluxeMenusConfig {
         return menuDirectory;
     }
 
-    private static <T extends Keyed> T getRegistryValue(@NotNull final Registry<T> registry, @NotNull final String name) {
+    @SuppressWarnings("unchecked")
+    private static PatternType getPatternType(@NotNull final String name) {
+        final String normalizedName = name.toLowerCase(Locale.ROOT).replace(' ', '_');
+        try {
+            final Field registryField = Registry.class.getField("BANNER_PATTERN");
+            final Registry<PatternType> registry = (Registry<PatternType>) registryField.get(null);
+            final PatternType value = getRegistryValue(registry, normalizedName);
+            if (value != null) {
+                return value;
+            }
+        } catch (IllegalAccessException | NoSuchFieldException ignored) {
+        }
+
+        try {
+            final Method valueOf = PatternType.class.getMethod("valueOf", String.class);
+            return (PatternType) valueOf.invoke(null, name.toUpperCase(Locale.ROOT));
+        } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException exception) {
+            throw new IllegalArgumentException("Unknown pattern type: " + name, exception);
+        }
+    }
+
+    private static <T extends org.bukkit.Keyed> T getRegistryValue(@NotNull final Registry<T> registry, @NotNull final String name) {
         final String normalizedName = name.toLowerCase(Locale.ROOT).replace(' ', '_');
         NamespacedKey key = NamespacedKey.fromString(normalizedName);
 
         if (key == null) {
-            key = NamespacedKey.minecraft(normalizedName);
+            try {
+                key = NamespacedKey.minecraft(normalizedName);
+            } catch (IllegalArgumentException exception) {
+                return null;
+            }
         }
 
-        final T value = registry.get(key);
-        if (value == null) {
-            throw new IllegalArgumentException("Unknown registry key: " + name);
-        }
-        return value;
+        return registry.get(key);
     }
 
     public void addEnchantmentsOptionToBuilder(
