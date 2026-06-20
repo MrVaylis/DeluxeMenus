@@ -14,6 +14,7 @@ import com.extendedclip.deluxemenus.utils.VersionHelper;
 import com.google.common.collect.ImmutableMultimap;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
+import org.bukkit.Keyed;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
@@ -336,8 +337,8 @@ public class MenuItem {
             final Optional<String> trimPatternName = this.options.trimPattern();
 
             if (trimMaterialName.isPresent() && trimPatternName.isPresent()) {
-                final TrimMaterial trimMaterial = Registry.TRIM_MATERIAL.match(holder.setPlaceholdersAndArguments(trimMaterialName.get()));
-                final TrimPattern trimPattern = Registry.TRIM_PATTERN.match(holder.setPlaceholdersAndArguments(trimPatternName.get()));
+                final TrimMaterial trimMaterial = getRegistryValue(Registry.TRIM_MATERIAL, holder.setPlaceholdersAndArguments(trimMaterialName.get()));
+                final TrimPattern trimPattern = getRegistryValue(Registry.TRIM_PATTERN, holder.setPlaceholdersAndArguments(trimPatternName.get()));
 
                 if (trimMaterial != null && trimPattern != null) {
                     final ArmorTrim armorTrim = new ArmorTrim(trimMaterial, trimPattern);
@@ -410,7 +411,7 @@ public class MenuItem {
                         plugin.debug(
                               DebugLevel.HIGHEST,
                               Level.INFO,
-                              "Failed to add enchantment " + entry.getKey().getName() + " to item " + itemStack.getType()
+                              "Failed to add enchantment " + entry.getKey().key().asString() + " to item " + itemStack.getType()
                         );
                     }
                 }
@@ -628,6 +629,17 @@ public class MenuItem {
             );
         }
         return color;
+    }
+
+    private static <T extends Keyed> T getRegistryValue(@NotNull final Registry<T> registry, @NotNull final String name) {
+        final String normalizedName = name.toLowerCase(Locale.ROOT).replace(' ', '_');
+        NamespacedKey key = NamespacedKey.fromString(normalizedName);
+
+        if (key == null) {
+            key = NamespacedKey.minecraft(normalizedName);
+        }
+
+        return registry.get(key);
     }
 
     public @NotNull MenuItemOptions options() {

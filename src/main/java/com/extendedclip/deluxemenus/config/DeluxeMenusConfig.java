@@ -35,8 +35,11 @@ import com.extendedclip.deluxemenus.utils.VersionHelper;
 import com.google.common.base.Enums;
 import com.google.common.primitives.Ints;
 import org.bukkit.DyeColor;
+import org.bukkit.Keyed;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.block.banner.PatternType;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -725,7 +728,7 @@ public class DeluxeMenusConfig {
 
                     try {
                         color = DyeColor.valueOf(metaParts[0].toUpperCase());
-                        type = PatternType.valueOf(metaParts[1].toUpperCase());
+                        type = getRegistryValue(Registry.BANNER_PATTERN, metaParts[1]);
                     } catch (IllegalArgumentException exception) {
                         plugin.debug(DebugLevel.HIGHEST, Level.WARNING, "Banner Meta for item: " + key + ", meta entry: " + e + " is invalid! Skipping this entry!");
 
@@ -1287,6 +1290,21 @@ public class DeluxeMenusConfig {
 
     public File getMenuDirector() {
         return menuDirectory;
+    }
+
+    private static <T extends Keyed> T getRegistryValue(@NotNull final Registry<T> registry, @NotNull final String name) {
+        final String normalizedName = name.toLowerCase(Locale.ROOT).replace(' ', '_');
+        NamespacedKey key = NamespacedKey.fromString(normalizedName);
+
+        if (key == null) {
+            key = NamespacedKey.minecraft(normalizedName);
+        }
+
+        final T value = registry.get(key);
+        if (value == null) {
+            throw new IllegalArgumentException("Unknown registry key: " + name);
+        }
+        return value;
     }
 
     public void addEnchantmentsOptionToBuilder(
