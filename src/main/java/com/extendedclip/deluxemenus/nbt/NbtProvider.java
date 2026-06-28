@@ -5,59 +5,18 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Optional;
 
 public final class NbtProvider {
 
-    private static boolean NBT_HOOKED;
+    private static final NbtHook NBT_HOOK = createHook();
 
-    private static Method getStringMethod;
-    private static Method setStringMethod;
-    private static Method setBooleanMethod;
-    private static Method setByteMethod;
-    private static Method setShortMethod;
-    private static Method setIntMethod;
-    private static Method removeTagMethod;
-    private static Method hasTagMethod;
-    private static Method getTagMethod;
-    private static Method setTagMethod;
-    private static Method containsMethod;
-    private static Method asNMSCopyMethod;
-    private static Method asBukkitCopyMethod;
-
-    private static Constructor<?> nbtCompoundConstructor;
-
-    static {
-        try {
-            final Class<?> compoundClass = VersionHelper.getNMSClass("nbt", "NBTTagCompound");
-            final Class<?> itemStackClass = VersionHelper.getNMSClass("world.item", "ItemStack");
-            final Class<?> inventoryClass = VersionHelper.getCraftClass("inventory.CraftItemStack");
-
-            containsMethod = compoundClass.getMethod(VersionConstants.CONTAINS_METHOD_NAME, String.class);
-            getStringMethod = compoundClass.getMethod(VersionConstants.GET_STRING_METHOD_NAME, String.class);
-            setStringMethod = compoundClass.getMethod(VersionConstants.SET_STRING_METHOD_NAME, String.class, String.class);
-            setBooleanMethod = compoundClass.getMethod(VersionConstants.SET_BOOLEAN_METHOD_NAME, String.class, boolean.class);
-            setByteMethod = compoundClass.getMethod(VersionConstants.SET_BYTE_METHOD_NAME, String.class, byte.class);
-            setShortMethod = compoundClass.getMethod(VersionConstants.SET_SHORT_METHOD_NAME, String.class, short.class);
-            setIntMethod = compoundClass.getMethod(VersionConstants.SET_INTEGER_METHOD_NAME, String.class, int.class);
-            removeTagMethod = compoundClass.getMethod(VersionConstants.REMOVE_TAG_METHOD_NAME, String.class);
-            hasTagMethod = itemStackClass.getMethod(VersionConstants.HAS_TAG_METHOD_NAME);
-            getTagMethod = itemStackClass.getMethod(VersionConstants.GET_TAG_METHOD_NAME);
-            setTagMethod = itemStackClass.getMethod(VersionConstants.SET_TAG_METHOD_NAME, compoundClass);
-            nbtCompoundConstructor = compoundClass.getDeclaredConstructor();
-
-            asNMSCopyMethod = inventoryClass.getMethod("asNMSCopy", ItemStack.class);
-            asBukkitCopyMethod = inventoryClass.getMethod("asBukkitCopy", itemStackClass);
-
-            NBT_HOOKED = true;
-        } catch (NoSuchMethodException | ClassNotFoundException e) {
-            NBT_HOOKED = false;
-        }
+    private NbtProvider() {
     }
 
     public static boolean isAvailable() {
-        return NBT_HOOKED;
+        return NBT_HOOK != null;
     }
 
     /**
@@ -72,13 +31,7 @@ public final class NbtProvider {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return itemStack;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        setString(itemCompound, key, value);
-        setTag(nmsItemStack, itemCompound);
-
-        return asBukkitCopy(nmsItemStack);
+        return withHook(itemStack, hook -> hook.setString(itemStack, key, value));
     }
 
     /**
@@ -94,13 +47,7 @@ public final class NbtProvider {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return itemStack;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        setBoolean(itemCompound, key, value);
-        setTag(nmsItemStack, itemCompound);
-
-        return asBukkitCopy(nmsItemStack);
+        return withHook(itemStack, hook -> hook.setBoolean(itemStack, key, value));
     }
 
     /**
@@ -113,60 +60,44 @@ public final class NbtProvider {
     public static String getString(final ItemStack itemStack, final String key) {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return null;
+        if (NBT_HOOK == null) return null;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        return getString(itemCompound, key);
+        try {
+            return NBT_HOOK.getString(itemStack, key);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
     }
 
     public static ItemStack setByte(final ItemStack itemStack, final String key, final byte value) {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return null;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        setByte(itemCompound, key, value);
-        setTag(nmsItemStack, itemCompound);
-
-        return asBukkitCopy(nmsItemStack);
+        return withHook(itemStack, hook -> hook.setByte(itemStack, key, value));
     }
 
     public static ItemStack setShort(final ItemStack itemStack, final String key, final short value) {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return null;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        setShort(itemCompound, key, value);
-        setTag(nmsItemStack, itemCompound);
-
-        return asBukkitCopy(nmsItemStack);
+        return withHook(itemStack, hook -> hook.setShort(itemStack, key, value));
     }
 
     public static ItemStack setInt(final ItemStack itemStack, final String key, final int value) {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return null;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        setInt(itemCompound, key, value);
-        setTag(nmsItemStack, itemCompound);
-
-        return asBukkitCopy(nmsItemStack);
+        return withHook(itemStack, hook -> hook.setInt(itemStack, key, value));
     }
 
     public static boolean hasKey(final ItemStack itemStack, final String key) {
         if (itemStack == null) return false;
+        if (itemStack.getType() == Material.AIR) return false;
+        if (NBT_HOOK == null) return false;
 
-        final Object nmsItemStack = asNMSCopy(itemStack);
-        final Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
         try {
-            return (boolean) containsMethod.invoke(itemCompound, key);
-        } catch (IllegalAccessException | InvocationTargetException e) {
+            return NBT_HOOK.hasKey(itemStack, key);
+        } catch (ReflectiveOperationException | RuntimeException e) {
             return false;
         }
     }
@@ -175,169 +106,361 @@ public final class NbtProvider {
         if (itemStack == null) return null;
         if (itemStack.getType() == Material.AIR) return null;
 
-        Object nmsItemStack = asNMSCopy(itemStack);
-        if (!hasTag(nmsItemStack)) return itemStack;
-        Object itemCompound = hasTag(nmsItemStack) ? getTag(nmsItemStack) : newNBTTagCompound();
-
-        removeTag(itemCompound, key);
-        setTag(nmsItemStack, itemCompound);
-
-        return asBukkitCopy(nmsItemStack);
+        return withHook(itemStack, hook -> hook.removeKey(itemStack, key));
     }
 
-    /**
-     * Mimics the itemCompound#setString method.
-     *
-     * @param itemCompound The ItemCompound.
-     * @param key          The key to add.
-     * @param value        The value to add.
-     */
-    private static void setString(final Object itemCompound, final String key, final String value) {
-        try {
-            setStringMethod.invoke(itemCompound, key, value);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    private static void setBoolean(final Object itemCompound, final String key, final boolean value) {
-        try {
-            setBooleanMethod.invoke(itemCompound, key, value);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    private static void setByte(final Object itemCompound, final String key, final byte value) {
-        try {
-            setByteMethod.invoke(itemCompound, key, value);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    private static void setShort(final Object itemCompound, final String key, final short value) {
-        try {
-            setShortMethod.invoke(itemCompound, key, value);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    private static void setInt(final Object itemCompound, final String key, final int value) {
-        try {
-            setIntMethod.invoke(itemCompound, key, value);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    /**
-     * Mimics the itemCompound#getString method.
-     *
-     * @param itemCompound The ItemCompound.
-     * @param key          The key to get from.
-     * @return A string with the value from the key.
-     */
-    private static String getString(final Object itemCompound, final String key) {
-        try {
-            return (String) getStringMethod.invoke(itemCompound, key);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Mimics the nmsItemStack#hasTag method.
-     *
-     * @param nmsItemStack the NMS ItemStack to check from.
-     * @return True or false depending if it has tag or not.
-     */
-    private static boolean hasTag(final Object nmsItemStack) {
-        try {
-            return (boolean) hasTagMethod.invoke(nmsItemStack);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            return false;
-        }
-    }
-
-    /**
-     * Mimics the nmsItemStack#getTag method.
-     *
-     * @param nmsItemStack The NMS ItemStack to get from.
-     * @return The tag compound.
-     */
-    public static Object getTag(final Object nmsItemStack) {
-        try {
-            return getTagMethod.invoke(nmsItemStack);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Mimics the nmsItemStack#setTag method.
-     *
-     * @param nmsItemStack the NMS ItemStack to set the tag to.
-     * @param itemCompound The item compound to set.
-     */
-    private static void setTag(final Object nmsItemStack, final Object itemCompound) {
-        try {
-            setTagMethod.invoke(nmsItemStack, itemCompound);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    /**
-     * Mimics the nmsItemStack#removeTag method.
-     *
-     * @param nmsItemStack the NMS ItemStack to remove the tag from.
-     * @param itemCompound The item compound to remove.
-     */
-    private static void removeTag(final Object nmsItemStack, final Object itemCompound) {
-        try {
-            removeTagMethod.invoke(nmsItemStack, itemCompound);
-        } catch (IllegalAccessException | InvocationTargetException ignored) {
-        }
-    }
-
-    /**
-     * Mimics the new NBTTagCompound instantiation.
-     *
-     * @return The new NBTTagCompound.
-     */
-    private static Object newNBTTagCompound() {
-        try {
-            return nbtCompoundConstructor.newInstance();
-        } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
-            return null;
-        }
-    }
-
-    /**
-     * Mimics the CraftItemStack#asNMSCopy method.
-     *
-     * @param itemStack The ItemStack to make NMS copy.
-     * @return An NMS copy of the ItemStack.
-     */
     public static Object asNMSCopy(final ItemStack itemStack) {
+        if (NBT_HOOK == null) return null;
+
         try {
-            return asNMSCopyMethod.invoke(null, itemStack);
-        } catch (IllegalAccessException | InvocationTargetException e) {
+            return NBT_HOOK.asNmsCopy(itemStack);
+        } catch (ReflectiveOperationException | RuntimeException e) {
             return null;
         }
     }
 
-    /**
-     * Mimics the CraftItemStack#asBukkitCopy method.
-     *
-     * @param nmsItemStack The NMS ItemStack to turn into {@link ItemStack}.
-     * @return The new {@link ItemStack}.
-     */
     public static ItemStack asBukkitCopy(final Object nmsItemStack) {
+        if (NBT_HOOK == null) return null;
+
         try {
-            return (ItemStack) asBukkitCopyMethod.invoke(null, nmsItemStack);
-        } catch (IllegalAccessException | InvocationTargetException e) {
+            return NBT_HOOK.asBukkitCopy(nmsItemStack);
+        } catch (ReflectiveOperationException | RuntimeException e) {
             return null;
         }
     }
 
-    private static class VersionConstants {
+    private static ItemStack withHook(final ItemStack fallback, final HookOperation operation) {
+        if (NBT_HOOK == null) return fallback;
+
+        try {
+            final ItemStack itemStack = operation.apply(NBT_HOOK);
+            return itemStack == null ? fallback : itemStack;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return fallback;
+        }
+    }
+
+    private static NbtHook createHook() {
+        if (VersionHelper.HAS_DATA_COMPONENTS) {
+            try {
+                return new ModernNbtHook();
+            } catch (ReflectiveOperationException ignored) {
+            }
+        }
+
+        try {
+            return new LegacyNbtHook();
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
+    }
+
+    private static Class<?> findCraftItemStackClass() throws ClassNotFoundException {
+        try {
+            return Class.forName("org.bukkit.craftbukkit.inventory.CraftItemStack");
+        } catch (ClassNotFoundException ignored) {
+            return VersionHelper.getCraftClass("inventory.CraftItemStack");
+        }
+    }
+
+    private interface HookOperation {
+
+        ItemStack apply(NbtHook hook) throws ReflectiveOperationException;
+    }
+
+    private interface NbtHook {
+
+        ItemStack setString(ItemStack itemStack, String key, String value) throws ReflectiveOperationException;
+
+        ItemStack setBoolean(ItemStack itemStack, String key, boolean value) throws ReflectiveOperationException;
+
+        ItemStack setByte(ItemStack itemStack, String key, byte value) throws ReflectiveOperationException;
+
+        ItemStack setShort(ItemStack itemStack, String key, short value) throws ReflectiveOperationException;
+
+        ItemStack setInt(ItemStack itemStack, String key, int value) throws ReflectiveOperationException;
+
+        String getString(ItemStack itemStack, String key) throws ReflectiveOperationException;
+
+        boolean hasKey(ItemStack itemStack, String key) throws ReflectiveOperationException;
+
+        ItemStack removeKey(ItemStack itemStack, String key) throws ReflectiveOperationException;
+
+        Object asNmsCopy(ItemStack itemStack) throws ReflectiveOperationException;
+
+        ItemStack asBukkitCopy(Object nmsItemStack) throws ReflectiveOperationException;
+    }
+
+    private static final class ModernNbtHook implements NbtHook {
+
+        private final Class<?> compoundClass;
+        private final Object customDataComponentType;
+        private final Method asNmsCopyMethod;
+        private final Method asBukkitCopyMethod;
+        private final Method getComponentMethod;
+        private final Method setComponentMethod;
+        private final Method removeComponentMethod;
+        private final Method customDataOfMethod;
+        private final Method customDataCopyTagMethod;
+        private final Method putStringMethod;
+        private final Method putBooleanMethod;
+        private final Method putByteMethod;
+        private final Method putShortMethod;
+        private final Method putIntMethod;
+        private final Method containsMethod;
+        private final Method removeTagMethod;
+        private final Method isEmptyMethod;
+        private final Method getStringMethod;
+        private final Method getStringOrMethod;
+
+        private ModernNbtHook() throws ReflectiveOperationException {
+            final Class<?> dataComponentTypeClass = Class.forName("net.minecraft.core.component.DataComponentType");
+            final Class<?> dataComponentsClass = Class.forName("net.minecraft.core.component.DataComponents");
+            final Class<?> itemStackClass = Class.forName("net.minecraft.world.item.ItemStack");
+            final Class<?> customDataClass = Class.forName("net.minecraft.world.item.component.CustomData");
+            final Class<?> craftItemStackClass = findCraftItemStackClass();
+
+            compoundClass = Class.forName("net.minecraft.nbt.CompoundTag");
+            customDataComponentType = dataComponentsClass.getField("CUSTOM_DATA").get(null);
+
+            asNmsCopyMethod = craftItemStackClass.getMethod("asNMSCopy", ItemStack.class);
+            asBukkitCopyMethod = craftItemStackClass.getMethod("asBukkitCopy", itemStackClass);
+            getComponentMethod = itemStackClass.getMethod("get", dataComponentTypeClass);
+            setComponentMethod = itemStackClass.getMethod("set", dataComponentTypeClass, Object.class);
+            removeComponentMethod = itemStackClass.getMethod("remove", dataComponentTypeClass);
+            customDataOfMethod = customDataClass.getMethod("of", compoundClass);
+            customDataCopyTagMethod = customDataClass.getMethod("copyTag");
+
+            putStringMethod = compoundClass.getMethod("putString", String.class, String.class);
+            putBooleanMethod = compoundClass.getMethod("putBoolean", String.class, boolean.class);
+            putByteMethod = compoundClass.getMethod("putByte", String.class, byte.class);
+            putShortMethod = compoundClass.getMethod("putShort", String.class, short.class);
+            putIntMethod = compoundClass.getMethod("putInt", String.class, int.class);
+            containsMethod = compoundClass.getMethod("contains", String.class);
+            removeTagMethod = compoundClass.getMethod("remove", String.class);
+            isEmptyMethod = compoundClass.getMethod("isEmpty");
+            getStringMethod = findMethod(compoundClass, "getString", String.class);
+            getStringOrMethod = findMethod(compoundClass, "getStringOr", String.class, String.class);
+            if (getStringMethod == null && getStringOrMethod == null) {
+                throw new NoSuchMethodException("CompoundTag#getString or CompoundTag#getStringOr");
+            }
+        }
+
+        @Override
+        public ItemStack setString(final ItemStack itemStack, final String key, final String value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> putStringMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setBoolean(final ItemStack itemStack, final String key, final boolean value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> putBooleanMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setByte(final ItemStack itemStack, final String key, final byte value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> putByteMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setShort(final ItemStack itemStack, final String key, final short value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> putShortMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setInt(final ItemStack itemStack, final String key, final int value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> putIntMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public String getString(final ItemStack itemStack, final String key) throws ReflectiveOperationException {
+            final Object compound = copyCustomDataTag(asNmsCopy(itemStack));
+
+            if (getStringOrMethod != null) {
+                return (String) getStringOrMethod.invoke(compound, key, null);
+            }
+
+            final Object value = getStringMethod.invoke(compound, key);
+            if (value instanceof Optional<?> optional) {
+                return optional.map(Object::toString).orElse(null);
+            }
+
+            return (String) value;
+        }
+
+        @Override
+        public boolean hasKey(final ItemStack itemStack, final String key) throws ReflectiveOperationException {
+            return (boolean) containsMethod.invoke(copyCustomDataTag(asNmsCopy(itemStack)), key);
+        }
+
+        @Override
+        public ItemStack removeKey(final ItemStack itemStack, final String key) throws ReflectiveOperationException {
+            return update(itemStack, compound -> removeTagMethod.invoke(compound, key));
+        }
+
+        @Override
+        public Object asNmsCopy(final ItemStack itemStack) throws ReflectiveOperationException {
+            return asNmsCopyMethod.invoke(null, itemStack);
+        }
+
+        @Override
+        public ItemStack asBukkitCopy(final Object nmsItemStack) throws ReflectiveOperationException {
+            return (ItemStack) asBukkitCopyMethod.invoke(null, nmsItemStack);
+        }
+
+        private ItemStack update(final ItemStack itemStack, final CompoundOperation operation) throws ReflectiveOperationException {
+            final Object nmsItemStack = asNmsCopy(itemStack);
+            final Object compound = copyCustomDataTag(nmsItemStack);
+
+            operation.apply(compound);
+
+            if ((boolean) isEmptyMethod.invoke(compound)) {
+                removeComponentMethod.invoke(nmsItemStack, customDataComponentType);
+            } else {
+                setComponentMethod.invoke(nmsItemStack, customDataComponentType, customDataOfMethod.invoke(null, compound));
+            }
+
+            return asBukkitCopy(nmsItemStack);
+        }
+
+        private Object copyCustomDataTag(final Object nmsItemStack) throws ReflectiveOperationException {
+            final Object customData = getComponentMethod.invoke(nmsItemStack, customDataComponentType);
+            if (customData == null) {
+                return compoundClass.getDeclaredConstructor().newInstance();
+            }
+
+            return customDataCopyTagMethod.invoke(customData);
+        }
+    }
+
+    private static final class LegacyNbtHook implements NbtHook {
+
+        private final Constructor<?> nbtCompoundConstructor;
+        private final Method getStringMethod;
+        private final Method setStringMethod;
+        private final Method setBooleanMethod;
+        private final Method setByteMethod;
+        private final Method setShortMethod;
+        private final Method setIntMethod;
+        private final Method removeTagMethod;
+        private final Method containsMethod;
+        private final Method hasTagMethod;
+        private final Method getTagMethod;
+        private final Method setTagMethod;
+        private final Method asNmsCopyMethod;
+        private final Method asBukkitCopyMethod;
+
+        private LegacyNbtHook() throws ReflectiveOperationException {
+            final Class<?> compoundClass = VersionHelper.getNMSClass("nbt", "NBTTagCompound");
+            final Class<?> itemStackClass = VersionHelper.getNMSClass("world.item", "ItemStack");
+            final Class<?> inventoryClass = findCraftItemStackClass();
+
+            containsMethod = compoundClass.getMethod(VersionConstants.CONTAINS_METHOD_NAME, String.class);
+            getStringMethod = compoundClass.getMethod(VersionConstants.GET_STRING_METHOD_NAME, String.class);
+            setStringMethod = compoundClass.getMethod(VersionConstants.SET_STRING_METHOD_NAME, String.class, String.class);
+            setBooleanMethod = compoundClass.getMethod(VersionConstants.SET_BOOLEAN_METHOD_NAME, String.class, boolean.class);
+            setByteMethod = compoundClass.getMethod(VersionConstants.SET_BYTE_METHOD_NAME, String.class, byte.class);
+            setShortMethod = compoundClass.getMethod(VersionConstants.SET_SHORT_METHOD_NAME, String.class, short.class);
+            setIntMethod = compoundClass.getMethod(VersionConstants.SET_INTEGER_METHOD_NAME, String.class, int.class);
+            removeTagMethod = compoundClass.getMethod(VersionConstants.REMOVE_TAG_METHOD_NAME, String.class);
+            hasTagMethod = itemStackClass.getMethod(VersionConstants.HAS_TAG_METHOD_NAME);
+            getTagMethod = itemStackClass.getMethod(VersionConstants.GET_TAG_METHOD_NAME);
+            setTagMethod = itemStackClass.getMethod(VersionConstants.SET_TAG_METHOD_NAME, compoundClass);
+            nbtCompoundConstructor = compoundClass.getDeclaredConstructor();
+
+            asNmsCopyMethod = inventoryClass.getMethod("asNMSCopy", ItemStack.class);
+            asBukkitCopyMethod = inventoryClass.getMethod("asBukkitCopy", itemStackClass);
+        }
+
+        @Override
+        public ItemStack setString(final ItemStack itemStack, final String key, final String value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> setStringMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setBoolean(final ItemStack itemStack, final String key, final boolean value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> setBooleanMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setByte(final ItemStack itemStack, final String key, final byte value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> setByteMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setShort(final ItemStack itemStack, final String key, final short value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> setShortMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public ItemStack setInt(final ItemStack itemStack, final String key, final int value) throws ReflectiveOperationException {
+            return update(itemStack, compound -> setIntMethod.invoke(compound, key, value));
+        }
+
+        @Override
+        public String getString(final ItemStack itemStack, final String key) throws ReflectiveOperationException {
+            return (String) getStringMethod.invoke(getOrCreateTag(asNmsCopy(itemStack)), key);
+        }
+
+        @Override
+        public boolean hasKey(final ItemStack itemStack, final String key) throws ReflectiveOperationException {
+            return (boolean) containsMethod.invoke(getOrCreateTag(asNmsCopy(itemStack)), key);
+        }
+
+        @Override
+        public ItemStack removeKey(final ItemStack itemStack, final String key) throws ReflectiveOperationException {
+            final Object nmsItemStack = asNmsCopy(itemStack);
+            if (!(boolean) hasTagMethod.invoke(nmsItemStack)) return itemStack;
+
+            final Object compound = getOrCreateTag(nmsItemStack);
+            removeTagMethod.invoke(compound, key);
+            setTagMethod.invoke(nmsItemStack, compound);
+
+            return asBukkitCopy(nmsItemStack);
+        }
+
+        @Override
+        public Object asNmsCopy(final ItemStack itemStack) throws ReflectiveOperationException {
+            return asNmsCopyMethod.invoke(null, itemStack);
+        }
+
+        @Override
+        public ItemStack asBukkitCopy(final Object nmsItemStack) throws ReflectiveOperationException {
+            return (ItemStack) asBukkitCopyMethod.invoke(null, nmsItemStack);
+        }
+
+        private ItemStack update(final ItemStack itemStack, final CompoundOperation operation) throws ReflectiveOperationException {
+            final Object nmsItemStack = asNmsCopy(itemStack);
+            final Object compound = getOrCreateTag(nmsItemStack);
+
+            operation.apply(compound);
+            setTagMethod.invoke(nmsItemStack, compound);
+
+            return asBukkitCopy(nmsItemStack);
+        }
+
+        private Object getOrCreateTag(final Object nmsItemStack) throws ReflectiveOperationException {
+            if ((boolean) hasTagMethod.invoke(nmsItemStack)) {
+                return getTagMethod.invoke(nmsItemStack);
+            }
+
+            return nbtCompoundConstructor.newInstance();
+        }
+    }
+
+    private interface CompoundOperation {
+
+        void apply(Object compound) throws ReflectiveOperationException;
+    }
+
+    private static Method findMethod(final Class<?> clazz, final String methodName, final Class<?>... parameterTypes) {
+        try {
+            return clazz.getMethod(methodName, parameterTypes);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
+    }
+
+    private static final class VersionConstants {
 
         private final static String CONTAINS_METHOD_NAME = containsMethodName();
         private final static String GET_STRING_METHOD_NAME = getStringMethodName();
