@@ -17,7 +17,6 @@ import com.extendedclip.deluxemenus.persistentmeta.PersistentMetaHandler;
 import com.extendedclip.deluxemenus.placeholder.Expansion;
 import com.extendedclip.deluxemenus.scheduler.UniversalScheduler;
 import com.extendedclip.deluxemenus.scheduler.scheduling.schedulers.TaskScheduler;
-import com.extendedclip.deluxemenus.updatechecker.UpdateChecker;
 import com.extendedclip.deluxemenus.utils.DebugLevel;
 import com.extendedclip.deluxemenus.utils.Messages;
 import com.extendedclip.deluxemenus.utils.VersionHelper;
@@ -119,7 +118,6 @@ public class DeluxeMenus extends JavaPlugin {
         new Expansion(this).register();
 
         setUpBungeeCordMessaging();
-        setUpUpdateChecker();
         setUpMetrics();
     }
 
@@ -322,22 +320,6 @@ public class DeluxeMenus extends JavaPlugin {
 
     private void setUpBungeeCordMessaging() {
         Bukkit.getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
-    }
-
-    private void setUpUpdateChecker() {
-        if (!this.generalConfig.checkForUpdates()) {
-            return;
-        }
-
-        final UpdateChecker updateChecker = new UpdateChecker(this);
-        updateChecker.register();
-
-        if (updateChecker.updateAvailable()) {
-            this.debug(DebugLevel.HIGHEST, Level.INFO, "An update for DeluxeMenus (DeluxeMenus v" + updateChecker.getLatestVersion() + ")", "is available at https://www.spigotmc.org/resources/deluxemenus.11734/");
-            return;
-        }
-
-        this.debug(DebugLevel.HIGHEST, Level.INFO, "You are running the latest version of DeluxeMenus!");
     }
 
     private void setUpMetrics() {

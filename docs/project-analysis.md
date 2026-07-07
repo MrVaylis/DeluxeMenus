@@ -48,7 +48,6 @@ Root files:
 - `src/main/java/com/extendedclip/deluxemenus/nbt/` - NBT/NMS provider.
 - `src/main/java/com/extendedclip/deluxemenus/persistentmeta/` - persistent metadata actions.
 - `src/main/java/com/extendedclip/deluxemenus/placeholder/` - PlaceholderAPI expansion.
-- `src/main/java/com/extendedclip/deluxemenus/updatechecker/` - update checker.
 - `src/main/java/com/extendedclip/deluxemenus/utils/` - общие утилиты, messages, dump, strings, items, sounds.
 
 `src/main/resources`:
@@ -82,7 +81,7 @@ Root files:
 
 - `onLoad()` проверяет доступность `NbtProvider`, то есть NMS/NBT hook.
 - `onEnable()` загружает `GeneralConfig`, требует успешный hook в PlaceholderAPI, создает `PersistentMetaHandler`, `MenuItemMarker`, `DupeFixer`, Adventure audiences, scheduler-facing runtime, Vault/item hooks, затем запускает `DeluxeMenusConfig.loadDefConfig()` и `loadGUIMenus()`.
-- `onEnable()` регистрирует `PlayerListener`, главный command, Bungee plugin messaging, update checker и metrics.
+- `onEnable()` регистрирует `PlayerListener`, главный command, Bungee plugin messaging и metrics.
 - `onDisable()` unregister outgoing BungeeCord channel, отменяет scheduler tasks, закрывает Adventure audiences, вызывает shutdown-unload меню, чистит item hooks и unregister listeners.
 - `reload()` на уровне plugin class перегружает `GeneralConfig`; полноценная reload-команда дополнительно чистит caches, вызывает `plugin.reloadConfig()`, `Menu.unload(...)` и `loadGUIMenus()`.
 
@@ -102,7 +101,7 @@ Root files:
 - построение `MenuOptions`, `MenuItemOptions`, `RequirementList`, `ClickHandler`;
 - debug/logging решений загрузки.
 
-`src/main/java/com/extendedclip/deluxemenus/config/GeneralConfig.java` отвечает за общие настройки plugin runtime, включая debug/update-related behavior по сводке.
+`src/main/java/com/extendedclip/deluxemenus/config/GeneralConfig.java` отвечает за общие настройки plugin runtime, включая debug behavior по сводке.
 
 Архитектурный вывод: config слой уже имеет явную модель данных (`MenuOptions`, `MenuItemOptions`), но parser перегружен ответственностями. Основной кандидат на декомпозицию - выделение отдельных parser/validator classes для menu, item, requirements и click actions.
 
@@ -211,7 +210,7 @@ Root files:
 8. Создает `DeluxeMenusConfig`.
 9. Выполняет `loadDefConfig()`, затем `loadGUIMenus()`.
 10. Регистрирует listeners и `/deluxemenus` command.
-11. Настраивает Bungee messaging, update checker и metrics.
+11. Настраивает Bungee messaging и metrics.
 
 `onDisable()`:
 
@@ -635,7 +634,6 @@ Release / Security / Docs:
 
 ### High / P1
 
-- Update checker external dependency: `UpdateChecker` обращается к внешнему Spigot API. По сводке есть риск отсутствия явных network timeouts и зависимости startup/runtime от внешнего сервиса.
 - Static registry/reload/testability: `Menu` держит static maps для menus/holders/last opened/generations. Это упрощает доступ, но усложняет deterministic tests, reload isolation, memory cleanup и parallel test execution.
 - Reflection CommandMap/dangling `/help` references: per-menu commands регистрируются runtime через `CommandMap`; в `Menu.java` отмечен риск references, которые CraftBukkit хранит для `/help`. Возможны stale commands после reload.
 - NMS/NBT reflection compatibility: `NbtProvider` и NMS/PDC marker fallback требуют постоянной проверки на новых Minecraft/Paper versions.
@@ -686,7 +684,6 @@ Release / Security / Docs:
 - Выровнять `plugin.yml` и `paper-plugin.yml`: `api-version`, PlaceholderAPI required/softdepend semantics, declared permissions.
 - Добавить все используемые permissions в `plugin.yml`: `deluxemenus.reload`, `deluxemenus.list`, `deluxemenus.refresh`, `deluxemenus.meta` и другие найденные при полном grep-аудите.
 - Добавить command action safety docs: trusted config model, examples с явными warnings для `[console]`, economy и permission commands.
-- Установить network timeouts/error handling contract для `UpdateChecker`.
 - Обновить `CONTRIBUTING.md` под Java 21.
 
 ### Medium-Term / P2

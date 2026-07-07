@@ -149,23 +149,6 @@ public enum Messages {
 
     DUMP_SUCCESS(text("Dump created successfully! Find it at: ", NamedTextColor.GREEN)),
 
-    UPDATE_AVAILABLE(text("An update for", NamedTextColor.GREEN)
-            .append(space())
-            .append(Messages.PLUGIN_TITLE.message())
-            .append(space())
-            .append(text("is available. Version", NamedTextColor.GREEN))
-            .append(space())
-            .append(text("<latest-version>", NamedTextColor.WHITE))
-            .append(text(", You are running", NamedTextColor.GREEN))
-            .append(space())
-            .append(text("<current-version>", NamedTextColor.WHITE))
-            .append(newline())
-            .append(text("Download the latest version at:", NamedTextColor.GREEN))
-            .append(space())
-            .append(text("https://www.spigotmc.org/resources/deluxemenus.11734/", NamedTextColor.WHITE))
-
-    ),
-
     // Meta related messages
     WRONG_USAGE_META_COMMAND(WRONG_USAGE_BASE.message
             .append(text("/dm meta <player> <set/remove/add/subtract/switch/list/show>", NamedTextColor.GRAY))),

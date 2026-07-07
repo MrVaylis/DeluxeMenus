@@ -169,7 +169,6 @@ public class DeluxeMenusConfig {
                 "\n"
         );
         c.addDefault("debug", "LOW");
-        c.addDefault("check_updates", true);
         c.addDefault("use_admin_commands_in_menus_list", false);
         c.addDefault("menus_list_page_size", 10);
         c.options().copyDefaults(true);
